@@ -39,7 +39,13 @@
                 return this.tiers[this.tiers.length - 1];
             }
         };
+        
+        function tiersViewModel() {
+            var self = this;
+            self.tiers = ko.observableArray(design.tiers);
+        }
 
+        ko.applyBindings(new tiersViewModel());
 
         $(function () {
             paper = new Raphael(document.getElementById('canvas_container'), 500, 500);
@@ -56,7 +62,7 @@
                     expandable: true,
                     position: {
                         x: 'screenCenter',
-                        y: '200'
+                        y: '10'
                     }
                 },
                 images :
@@ -81,7 +87,14 @@
                // nothing.
             });
             
-            $('#tabs').tabs();
+            $('.tabs').tabs({
+                collapsible: true
+            });
+
+            $('.sortable').sortable({
+                items: "li:not(.locked)"
+            });
+            $(".sortable li").disableSelection();
 
             $("#widthSlider").slider({
                 value: design.tiers[0].width,
@@ -204,15 +217,27 @@
     <div id="canvas_container" style="width: 600px; height: 600px;"></div>
 </div>
 <div id="commands">
-    <div id="tiers">
-
-    </div>
-    <div id="tabs">
+    <div class="tabs">
         <ul>
-            <li><a href="#tabs-1">Tier 1 (bottom)</a></li>
-            <li><a href="#tabs-2">Add Tier</a></li>
+            <li><a href="#tabs-1">Tiers</a></li>
         </ul>
         <div id="tabs-1">
+           <ul id="tiers" class="sortable">
+                <!-- ko foreach: tiers -->
+                    <li class="ui-state-default">
+                        <div>Tier <span data-bind="text: $index()+1"></span></div>
+                        <div>Width: <span data-bind="text: width"></span> Inches</div>
+                    </li>
+                <!-- /ko -->
+                <li class="ui-state-default locked"><div id="addTier">Add another tier</div></li>
+            </ul>
+        </div>
+    </div>
+    <div id="properties" class="tabs">
+        <ul>
+            <li><a href="#property-tabs-1">Properties</a></li>
+        </ul>
+        <div id="property-tabs-1">
             <div>
                 <label id="width"></label>
                 <div id="widthSlider"></div>
@@ -225,9 +250,7 @@
                 <span>Color</span>
                 <div id="colorSelector"></div>
             </div>
-            <button id="addTier">Add Tier</button>
         </div>
-        <div id="tabs-2"></div>
     </div>
 </div>
 <div class="clear"></div>

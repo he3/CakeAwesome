@@ -1,17 +1,18 @@
-﻿html {
-    background-color: #fff;
+﻿html, ul, li, body {
     margin: 0;
     padding: 0;
+    list-style: none;
+}
+
+html {
+    background-color: #fff;
 }
 
 body {
-    background-color: #fff;
     border-top: solid 10px #000;
     color: #333;
     font-size: .85em;
     font-family: "Segoe UI", Verdana, Helvetica, Sans-Serif;
-    margin: 0;
-    padding: 0;
 }
 
 section {
@@ -23,8 +24,8 @@ section {
 }
 
 #commands {
-    background-color: gray;
     float: left;
+    width: 295px;
 }
 
 #canvas_container {
@@ -33,4 +34,8 @@ section {
 
 .clear {
     clear: both;
+}
+
+.ui-tabs .ui-tabs-panel {
+    padding: 5px;
 }
