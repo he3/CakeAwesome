@@ -1,0 +1,36 @@
+﻿html {
+    background-color: #fff;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: #fff;
+    border-top: solid 10px #000;
+    color: #333;
+    font-size: .85em;
+    font-family: "Segoe UI", Verdana, Helvetica, Sans-Serif;
+    margin: 0;
+    padding: 0;
+}
+
+section {
+    overflow: hidden;
+}
+
+#canvasContainer {
+    float: left;
+}
+
+#commands {
+    background-color: gray;
+    float: left;
+}
+
+#canvas_container {
+    border: solid 1px gray;
+}
+
+.clear {
+    clear: both;
+}

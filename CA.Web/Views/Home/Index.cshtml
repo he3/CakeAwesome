@@ -1,0 +1,233 @@
+﻿@{
+    ViewBag.Title = "Home Page";
+}
+
+@section Scripts{
+    <script type="text/javascript">
+        var paper;
+        var viewingAngle = .12;
+
+        var design = {
+            tiers: [{
+                'width': 14,
+                'height': 6,
+                'color': '#f00'
+            }],
+            height: function () {
+                var designHeight = 0;
+                this.tiers.forEach(function (t) {
+                    designHeight += t.height;
+                });
+                return designHeight;
+            },
+            width: function () {
+                var designWidth = 0;
+                this.tiers.forEach(function (t) {
+                    if (t.width > designWidth)
+                        designWidth = t.width;
+                });
+                return designWidth;
+            },
+            firstTier : function () {
+                if (this.tiers.length == 0) 
+                    return null;
+                return this.tiers[0];
+            },
+            lastTier : function () {
+                if (this.tiers.length ==0)
+                    return null;
+                return this.tiers[this.tiers.length - 1];
+            }
+        };
+
+
+        $(function () {
+            paper = new Raphael(document.getElementById('canvas_container'), 500, 500);
+            setCanvasSize();
+            drawDesign();
+
+            $(window).resize(function () {
+                setCanvasSize();
+                drawDesign();
+            });
+
+            $('#colorSelector').jPicker({
+                window: {
+                    expandable: true,
+                    position: {
+                        x: 'screenCenter',
+                        y: '200'
+                    }
+                },
+                images :
+                {
+                    clientPath: '@Url.Content("~/Images/jPicker/")' // Path to image files
+                },
+                color: {
+                    active: new $.jPicker.Color({ hex: '#ffffff' })
+                }
+            },
+            function (color, context) {
+                var all = color.val('all');
+                design.tiers[0].color = all && '#' + all.hex || '#fff'
+                drawDesign();
+            },
+            function (color, context) {
+                var hex = color.val('hex');
+                design.tiers[0].color = hex && '#' + hex || '#fff'
+                drawDesign();
+            },
+            function (color, context) {
+               // nothing.
+            });
+            
+            $('#tabs').tabs();
+
+            $("#widthSlider").slider({
+                value: design.tiers[0].width,
+                min: 6,
+                max: 18,
+                step: 2,
+                slide: function (event, ui) {
+                    $("#width").text("Width: " + ui.value + " Inches");
+                    design.tiers[0].width = ui.value;
+                    drawDesign();
+                }
+            });
+            $("#width").text("Width: " + $("#widthSlider").slider("value") + " Inches");
+
+            $("#heightSlider").slider({
+                value: design.tiers[0].height,
+                min: 2,
+                max: 12,
+                step: 1,
+                slide: function (event, ui) {
+                    $("#height").text("Height: " + ui.value + " Inches");
+                    design.tiers[0].height = ui.value;
+                    drawDesign();
+                }
+            });
+            $("#height").text("Height: " + $("#heightSlider").slider("value") + " Inches");
+
+            $('#addTier').click(addTier);
+        });
+
+        function setCanvasSize() {
+            var win = $(window);
+            var canvas = $('#canvas_container');
+            var toolboxWidth = 300;
+            var heightPad = 15;
+            var width = win.width() - toolboxWidth;
+            var height = win.height() - heightPad;
+            canvas.height(height);
+            canvas.width(width);
+            paper.setSize(width, height);
+        };
+
+
+        function drawDesign() {
+            paper.clear();
+
+            if (design.tiers.length == 0)
+                return;
+
+            var designHeight = design.height();
+            var designWidth = design.width();
+            var paperHeight = paper.height;
+            var paperWidth = paper.width;
+
+            // Adjust design height for faux 3D perspective (circle-top+bottom tier have 3d pad, box ? just top?)
+            var design3DPad = design.firstTier().width * viewingAngle;
+            design3DPad += design.lastTier().width * viewingAngle;
+
+            // Padding
+            var paddingPct = .05;
+            var paperVerticalPad = paperHeight * paddingPct;
+            var paperHorizontalPad = paperWidth * paddingPct;
+
+            // Optimal fit
+            var heightRatio = (paperHeight - 2 * paperVerticalPad) / (designHeight + design3DPad);
+            var widthRatio = (paperWidth - 2 * paperHorizontalPad) / designWidth;
+            var unitsPerInch = Math.min(heightRatio, widthRatio);
+
+            // Center design
+            var midHeight = paperHeight / 2;
+            var midWidth = paperWidth / 2;
+
+            var startY = midHeight - ((designHeight * unitsPerInch) / 2);
+
+            var consumedHeight = 0;
+            design.tiers.forEach(function (t) {
+                var computedHeight = t.height * unitsPerInch;
+                var computedWidth = t.width * unitsPerInch;
+                var x = midWidth - (computedWidth / 2);
+                var y = startY + (designHeight * unitsPerInch) - computedHeight - consumedHeight;
+                drawCylinder(x, y, computedWidth, computedHeight, t.color);
+
+                consumedHeight += computedHeight;
+            });
+        }
+
+        function drawCylinder(x, y, width, height, color) {
+            var path = "M" + x + "," + y;
+            path += "l" + width + "," + "0";
+            path += "l" + "0" + "," + height;
+            path += "a" + -width / 2 + "," + width * viewingAngle + "," +
+                    "0" + "," +
+                    "0" + "," + "1" + "," +
+                    -width + "," + "0";
+            path += "l" + "0" + "," + "-" + height;
+
+            var cakeCenter = paper.path(path);
+            var cakeTop = paper.ellipse(x + width / 2, y, width / 2, width * viewingAngle);
+            var tier = paper.set();
+            tier.push(cakeTop, cakeCenter).attr({
+                "fill": color
+            });
+        }
+
+        function addTier() {
+            var height = 6;
+            var width = 14 - (design.tiers.length * 2);
+
+            design.tiers.push({
+                'width': width,
+                'height': height,
+                'color': "#" + $.jPicker.List[0].color.active.val('hex')
+            });
+
+            drawDesign();
+        }
+    </script>
+}
+<div id="canvasContainer">
+    <div id="canvas_container" style="width: 600px; height: 600px;"></div>
+</div>
+<div id="commands">
+    <div id="tiers">
+
+    </div>
+    <div id="tabs">
+        <ul>
+            <li><a href="#tabs-1">Tier 1 (bottom)</a></li>
+            <li><a href="#tabs-2">Add Tier</a></li>
+        </ul>
+        <div id="tabs-1">
+            <div>
+                <label id="width"></label>
+                <div id="widthSlider"></div>
+            </div>
+            <div>
+                <label id="height"></label>
+                <div id="heightSlider"></div>
+            </div>
+            <div>
+                <span>Color</span>
+                <div id="colorSelector"></div>
+            </div>
+            <button id="addTier">Add Tier</button>
+        </div>
+        <div id="tabs-2"></div>
+    </div>
+</div>
+<div class="clear"></div>
