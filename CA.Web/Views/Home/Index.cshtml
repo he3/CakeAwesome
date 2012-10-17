@@ -4,52 +4,91 @@
 
 @section Scripts{
     <script type="text/javascript">
-        var paper;
-        var viewingAngle = .12;
 
-        var design = {
-            tiers: [{
-                'width': 14,
-                'height': 6,
-                'color': '#f00'
-            }],
-            height: function () {
-                var designHeight = 0;
-                this.tiers.forEach(function (t) {
-                    designHeight += t.height;
+        ko.bindingHandlers.jqSlider = {
+            init: function (element, valueAccessor, allBindingsAccessor) {
+                //initialize the control
+                var options = allBindingsAccessor().jqOptions || {};
+                $(element).slider(options);
+
+                //handle the value changing in the UI
+                ko.utils.registerEventHandler(element, "slide", function () {
+                    //would need to do some more work here, if you want to bind against non-observables
+                    var observable = valueAccessor();
+                    observable($(element).slider("value"));
                 });
-                return designHeight;
+
             },
-            width: function () {
-                var designWidth = 0;
-                this.tiers.forEach(function (t) {
-                    if (t.width > designWidth)
-                        designWidth = t.width;
-                });
-                return designWidth;
-            },
-            firstTier : function () {
-                if (this.tiers.length == 0) 
-                    return null;
-                return this.tiers[0];
-            },
-            lastTier : function () {
-                if (this.tiers.length ==0)
-                    return null;
-                return this.tiers[this.tiers.length - 1];
+            //handle the model value changing
+            update: function (element, valueAccessor) {
+                var value = ko.utils.unwrapObservable(valueAccessor());
+                $(element).slider("value", value);
             }
         };
-        
-        function tiersViewModel() {
-            var self = this;
-            self.tiers = ko.observableArray(design.tiers);
-        }
 
-        ko.applyBindings(new tiersViewModel());
+        var paper;
+        var viewingAngle = .12;
+        var design;
+
+        var Tier = function (width, height, color) {
+            var self = this;
+            self.width = ko.observable(width);
+            self.height = ko.observable(height);
+            self.color = ko.observable(color);
+
+            self.width.subscribe(drawDesign);
+            self.height.subscribe(drawDesign);
+            self.color.subscribe(drawDesign);
+        };
+
+        var Design = function () {
+            var self = this;
+            self.tiers = ko.observableArray([new Tier(14, 6, '#fff')]);
+            self.selectedTierIndex = ko.observable(0);
+            self.selectedTier = ko.computed(function () {
+                if (self.selectedTierIndex() == -1)
+                    return null;
+                return self.tiers()[self.selectedTierIndex()];
+            });
+            self.selectTier = function (tier) {
+                self.selectedTierIndex(ko.utils.arrayIndexOf(self.tiers(), tier));
+            };
+            self.height = function () {
+                var designHeight = 0;
+                $.each(self.tiers(), function () { designHeight += this.height() });
+                return designHeight;
+            };
+            self.width = function () {
+                var designWidth = 0;
+                $.each(self.tiers(), function () { if (this.width() > designWidth) { designWidth = this.width(); } });
+                return designWidth;
+            };
+            self.firstTier = function () {
+                if (self.tiers().length == 0) 
+                    return null;
+                return self.tiers()[0];
+            };
+            self.lastTier = function () {
+                if (self.tiers().length ==0)
+                    return null;
+                return self.tiers()[self.tiers().length - 1];
+            };
+            self.addTier = function () {
+                var height = self.selectedTier().height();
+                var width = self.selectedTier().width();
+                var color = self.selectedTier().color();
+                self.tiers.push(new Tier(width, height, color));
+                self.selectedTierIndex(self.tiers().length - 1);
+                drawDesign();
+            };
+        };
+
 
         $(function () {
             paper = new Raphael(document.getElementById('canvas_container'), 500, 500);
             setCanvasSize();
+            design = new Design();
+            ko.applyBindings(design);
             drawDesign();
 
             $(window).resize(function () {
@@ -75,12 +114,12 @@
             },
             function (color, context) {
                 var all = color.val('all');
-                design.tiers[0].color = all && '#' + all.hex || '#fff'
+                design.selectedTier().color(all && '#' + all.hex || '#fff');
                 drawDesign();
             },
             function (color, context) {
                 var hex = color.val('hex');
-                design.tiers[0].color = hex && '#' + hex || '#fff'
+                design.selectedTier().color(hex && '#' + hex || '#fff');
                 drawDesign();
             },
             function (color, context) {
@@ -95,34 +134,6 @@
                 items: "li:not(.locked)"
             });
             $(".sortable li").disableSelection();
-
-            $("#widthSlider").slider({
-                value: design.tiers[0].width,
-                min: 6,
-                max: 18,
-                step: 2,
-                slide: function (event, ui) {
-                    $("#width").text("Width: " + ui.value + " Inches");
-                    design.tiers[0].width = ui.value;
-                    drawDesign();
-                }
-            });
-            $("#width").text("Width: " + $("#widthSlider").slider("value") + " Inches");
-
-            $("#heightSlider").slider({
-                value: design.tiers[0].height,
-                min: 2,
-                max: 12,
-                step: 1,
-                slide: function (event, ui) {
-                    $("#height").text("Height: " + ui.value + " Inches");
-                    design.tiers[0].height = ui.value;
-                    drawDesign();
-                }
-            });
-            $("#height").text("Height: " + $("#heightSlider").slider("value") + " Inches");
-
-            $('#addTier').click(addTier);
         });
 
         function setCanvasSize() {
@@ -140,8 +151,7 @@
 
         function drawDesign() {
             paper.clear();
-
-            if (design.tiers.length == 0)
+            if (design.tiers().length == 0)
                 return;
 
             var designHeight = design.height();
@@ -150,8 +160,8 @@
             var paperWidth = paper.width;
 
             // Adjust design height for faux 3D perspective (circle-top+bottom tier have 3d pad, box ? just top?)
-            var design3DPad = design.firstTier().width * viewingAngle;
-            design3DPad += design.lastTier().width * viewingAngle;
+            var design3DPad = design.firstTier().width() * viewingAngle;
+            design3DPad += design.lastTier().width() * viewingAngle;
 
             // Padding
             var paddingPct = .05;
@@ -170,12 +180,12 @@
             var startY = midHeight - ((designHeight * unitsPerInch) / 2);
 
             var consumedHeight = 0;
-            design.tiers.forEach(function (t) {
-                var computedHeight = t.height * unitsPerInch;
-                var computedWidth = t.width * unitsPerInch;
+            design.tiers().forEach(function (t) {
+                var computedHeight = t.height() * unitsPerInch;
+                var computedWidth = t.width() * unitsPerInch;
                 var x = midWidth - (computedWidth / 2);
                 var y = startY + (designHeight * unitsPerInch) - computedHeight - consumedHeight;
-                drawCylinder(x, y, computedWidth, computedHeight, t.color);
+                drawCylinder(x, y, computedWidth, computedHeight, t.color());
 
                 consumedHeight += computedHeight;
             });
@@ -198,19 +208,6 @@
                 "fill": color
             });
         }
-
-        function addTier() {
-            var height = 6;
-            var width = 14 - (design.tiers.length * 2);
-
-            design.tiers.push({
-                'width': width,
-                'height': height,
-                'color': "#" + $.jPicker.List[0].color.active.val('hex')
-            });
-
-            drawDesign();
-        }
     </script>
 }
 <div id="canvasContainer">
@@ -224,12 +221,12 @@
         <div id="tabs-1">
            <ul id="tiers" class="sortable">
                 <!-- ko foreach: tiers -->
-                    <li class="ui-state-default">
+                    <li class="ui-state-default" data-bind="click: $root.selectTier">
                         <div>Tier <span data-bind="text: $index()+1"></span></div>
                         <div>Width: <span data-bind="text: width"></span> Inches</div>
                     </li>
                 <!-- /ko -->
-                <li class="ui-state-default locked"><div id="addTier">Add another tier</div></li>
+                <li class="ui-state-default locked" data-bind="click: addTier"><div id="addTier">Add another tier</div></li>
             </ul>
         </div>
     </div>
@@ -239,12 +236,12 @@
         </ul>
         <div id="property-tabs-1">
             <div>
-                <label id="width"></label>
-                <div id="widthSlider"></div>
+                <div>Width: <label data-bind="text: selectedTier().width()"></label> Inches</div>
+                <div data-bind='jqSlider: selectedTier().width, jqOptions: { min: 6, max: 18, step: 2 }'></div>
             </div>
             <div>
-                <label id="height"></label>
-                <div id="heightSlider"></div>
+                <div>Height: <label data-bind="text: selectedTier().height()"></label> Inches</div>
+                <div data-bind='jqSlider: selectedTier().height, jqOptions: { min: 2, max: 12, step: 1 }'></div>
             </div>
             <div>
                 <span>Color</span>
