@@ -5,6 +5,24 @@
 @section Scripts{
     <script type="text/javascript">
 
+        var panLayerInfo = function (panSize, servings, cupsBatter, bakingTemp, bakingTime, cupsIcing) {
+            var self = this;
+            self.panSize = panSize;
+            self.servings = servings;
+            self.cupsBatter = cupsBatter;
+            self.bakingTemp = bakingTemp;
+            self.bakingTime = bakingTime;
+            self.cupsIcing = cupsIcing;
+        };
+
+        
+
+        ko.observableArray.fn.insertAt = function (index, value) {
+            this.valueWillMutate();
+            this.splice(index, 0, value);
+            this.valueHasMutated();
+        }
+
         ko.bindingHandlers.jqSlider = {
             init: function (element, valueAccessor, allBindingsAccessor) {
                 //initialize the control
@@ -17,8 +35,8 @@
                     var observable = valueAccessor();
                     observable($(element).slider("value"));
                 });
-
             },
+
             //handle the model value changing
             update: function (element, valueAccessor) {
                 var value = ko.utils.unwrapObservable(valueAccessor());
@@ -26,24 +44,39 @@
             }
         };
 
-        var paper;
-        var viewingAngle = .12;
-        var design;
+        function jqSelectOptionButton(id) {
+            $('#' + id).attr('checked', true).button('refresh');
+        }
 
-        var Tier = function (width, height, color) {
+        var paper;
+        var design;
+        var viewingAngle = .12;
+        var defaultColor = '#ffffff';
+        var defaultWidth = 12;
+        var defaultPanDepth = 3;
+        var defaultHeight = 6;
+
+        var Tier = function (panDepth, width, height, color, number) {
             var self = this;
+            self.panDepth = ko.observable(panDepth);
             self.width = ko.observable(width);
             self.height = ko.observable(height);
             self.color = ko.observable(color);
+            self.number = ko.observable(number);
 
+            self.panDepth.subscribe(function (value) {
+                jqSelectOptionButton('depth' + value)
+                drawDesign();
+            });
             self.width.subscribe(drawDesign);
             self.height.subscribe(drawDesign);
             self.color.subscribe(drawDesign);
+            self.number.subscribe(drawDesign);
         };
 
         var Design = function () {
             var self = this;
-            self.tiers = ko.observableArray([new Tier(14, 6, '#fff')]);
+            self.tiers = ko.observableArray([new Tier(defaultPanDepth, defaultWidth, defaultHeight, defaultColor, 1)]);
             self.selectedTierIndex = ko.observable(0);
             self.selectedTier = ko.computed(function () {
                 if (self.selectedTierIndex() == -1)
@@ -74,13 +107,20 @@
                 return self.tiers()[self.tiers().length - 1];
             };
             self.addTier = function () {
+                var panDepth = self.selectedTier().panDepth();
                 var height = self.selectedTier().height();
                 var width = self.selectedTier().width();
                 var color = self.selectedTier().color();
-                self.tiers.push(new Tier(width, height, color));
+                var number = self.tiers().length + 1;
+                self.tiers.push(new Tier(panDepth, width, height, color, number));
                 self.selectedTierIndex(self.tiers().length - 1);
                 drawDesign();
             };
+
+            self.selectedTierIndex.subscribe(function () {
+                $.jPicker.List[0].color.active.val('hex', self.selectedTier().color());
+                jqSelectOptionButton('depth' + self.selectedTier().panDepth());
+            }, this);
         };
 
 
@@ -109,31 +149,29 @@
                     clientPath: '@Url.Content("~/Images/jPicker/")' // Path to image files
                 },
                 color: {
-                    active: new $.jPicker.Color({ hex: '#ffffff' })
+                    active: new $.jPicker.Color({ hex: defaultColor })
                 }
             },
             function (color, context) {
                 var all = color.val('all');
-                design.selectedTier().color(all && '#' + all.hex || '#fff');
-                drawDesign();
+                design.selectedTier().color(all && '#' + all.hex || defaultColor);
             },
             function (color, context) {
                 var hex = color.val('hex');
-                design.selectedTier().color(hex && '#' + hex || '#fff');
-                drawDesign();
+                design.selectedTier().color(hex && '#' + hex || defaultColor);
             },
             function (color, context) {
                // nothing.
             });
             
-            $('.tabs').tabs({
-                collapsible: true
-            });
-
-            $('.sortable').sortable({
-                items: "li:not(.locked)"
-            });
+            $('.buttonset').buttonset();
+            jqSelectOptionButton('depth' + defaultPanDepth);
+            $('.tabs').tabs({ collapsible: true });
+            $('.sortable').sortable({ items: "li:not(.locked)" });
             $(".sortable li").disableSelection();
+
+            $('#depth2').click(function () { design.selectedTier().panDepth(2); });
+            $('#depth3').click(function () { design.selectedTier().panDepth(3); });
         });
 
         function setCanvasSize() {
@@ -220,9 +258,9 @@
         </ul>
         <div id="tabs-1">
            <ul id="tiers" class="sortable">
-                <!-- ko foreach: tiers -->
+                <!-- ko foreach: tiers.slice(0).reverse() -->
                     <li class="ui-state-default" data-bind="click: $root.selectTier">
-                        <div>Tier <span data-bind="text: $index()+1"></span></div>
+                        <div>Tier <span data-bind="text: number"></span></div>
                         <div>Width: <span data-bind="text: width"></span> Inches</div>
                     </li>
                 <!-- /ko -->
@@ -235,6 +273,10 @@
             <li><a href="#property-tabs-1">Properties</a></li>
         </ul>
         <div id="property-tabs-1">
+            <div class="buttonset">
+                <input type="radio" id="depth2" name="depth" /><label for="depth2">2" deep pans</label>
+                <input type="radio" id="depth3" name="depth" /><label for="depth3">3" deep pans</label>
+            </div>
             <div>
                 <div>Width: <label data-bind="text: selectedTier().width()"></label> Inches</div>
                 <div data-bind='jqSlider: selectedTier().width, jqOptions: { min: 6, max: 18, step: 2 }'></div>
