@@ -15,14 +15,6 @@
             self.cupsIcing = cupsIcing;
         };
 
-        
-
-        ko.observableArray.fn.insertAt = function (index, value) {
-            this.valueWillMutate();
-            this.splice(index, 0, value);
-            this.valueHasMutated();
-        }
-
         ko.bindingHandlers.jqSlider = {
             init: function (element, valueAccessor, allBindingsAccessor) {
                 //initialize the control
@@ -30,17 +22,35 @@
                 $(element).slider(options);
 
                 //handle the value changing in the UI
-                ko.utils.registerEventHandler(element, "slide", function () {
+                ko.utils.registerEventHandler(element, "slidechange", function (event, ui) {
+                    var observable = valueAccessor();
+                    observable(ui.value);
+                });
+                ko.utils.domNodeDisposal.addDisposeCallback(element, function () {
+                    $(element).slider("destroy");
+                });
+                ko.utils.registerEventHandler(element, "slide", function (event, ui) {
                     //would need to do some more work here, if you want to bind against non-observables
                     var observable = valueAccessor();
-                    observable($(element).slider("value"));
+                    observable(ui.value);
                 });
             },
 
             //handle the model value changing
             update: function (element, valueAccessor) {
                 var value = ko.utils.unwrapObservable(valueAccessor());
-                $(element).slider("value", value);
+                $(element).slider('value', value).slider('refresh');
+            }
+        };
+
+        ko.bindingHandlers['class'] = {
+            'update': function (element, valueAccessor) {
+                if (element['__ko__previousClassValue__']) {
+                    $(element).removeClass(element['__ko__previousClassValue__']);
+                }
+                var value = ko.utils.unwrapObservable(valueAccessor());
+                $(element).addClass(value);
+                element['__ko__previousClassValue__'] = value;
             }
         };
 
@@ -85,6 +95,12 @@
             });
             self.selectTier = function (tier) {
                 self.selectedTierIndex(ko.utils.arrayIndexOf(self.tiers(), tier));
+            };
+            self.tierClass = function(tier){
+                if (self.selectedTier() == tier)
+                    return 'ui-selected';
+                else
+                    return 'not-selected';
             };
             self.height = function () {
                 var designHeight = 0;
@@ -138,11 +154,7 @@
 
             $('#colorSelector').jPicker({
                 window: {
-                    expandable: true,
-                    position: {
-                        x: 'screenCenter',
-                        y: '10'
-                    }
+                    expandable: true
                 },
                 images :
                 {
@@ -164,14 +176,21 @@
                // nothing.
             });
             
+            $('#addTier').button({
+                icons: { primary: 'ui-icon-plus' }
+            });
+
             $('.buttonset').buttonset();
             jqSelectOptionButton('depth' + defaultPanDepth);
-            $('.tabs').tabs({ collapsible: true });
-            $('.sortable').sortable({ items: "li:not(.locked)" });
-            $(".sortable li").disableSelection();
-
             $('#depth2').click(function () { design.selectedTier().panDepth(2); });
             $('#depth3').click(function () { design.selectedTier().panDepth(3); });
+
+            $('.tabs').tabs({ collapsible: true });
+            $('.sortable').sortable({
+                items: "li:not(.locked)",
+                handle: ".handle"
+            });
+            $(".sortable li").disableSelection();
         });
 
         function setCanvasSize() {
@@ -218,18 +237,20 @@
             var startY = midHeight - ((designHeight * unitsPerInch) / 2);
 
             var consumedHeight = 0;
+            var index = 0;
             design.tiers().forEach(function (t) {
                 var computedHeight = t.height() * unitsPerInch;
                 var computedWidth = t.width() * unitsPerInch;
                 var x = midWidth - (computedWidth / 2);
                 var y = startY + (designHeight * unitsPerInch) - computedHeight - consumedHeight;
-                drawCylinder(x, y, computedWidth, computedHeight, t.color());
+                drawCylinder(index, x, y, computedWidth, computedHeight, t.color());
 
+                index++;
                 consumedHeight += computedHeight;
             });
         }
 
-        function drawCylinder(x, y, width, height, color) {
+        function drawCylinder(tierIndex, x, y, width, height, color) {
             var path = "M" + x + "," + y;
             path += "l" + width + "," + "0";
             path += "l" + "0" + "," + height;
@@ -245,6 +266,9 @@
             tier.push(cakeTop, cakeCenter).attr({
                 "fill": color
             });
+            tier.click(function () {
+                design.selectedTierIndex(tierIndex);
+            });
         }
     </script>
 }
@@ -257,15 +281,14 @@
             <li><a href="#tabs-1">Tiers</a></li>
         </ul>
         <div id="tabs-1">
-           <ul id="tiers" class="sortable">
-                <!-- ko foreach: tiers.slice(0).reverse() -->
-                    <li class="ui-state-default" data-bind="click: $root.selectTier">
-                        <div>Tier <span data-bind="text: number"></span></div>
-                        <div>Width: <span data-bind="text: width"></span> Inches</div>
-                    </li>
-                <!-- /ko -->
-                <li class="ui-state-default locked" data-bind="click: addTier"><div id="addTier">Add another tier</div></li>
+           <ul class="sortable" data-bind="foreach: tiers.slice(0).reverse()">
+                <li class="tier" data-bind="click: $root.selectTier, class: $root.tierClass($data)">
+                    <div class='handle'><span class='ui-icon ui-icon-carat-2-n-s'></span></div>
+                    <div>Tier <span data-bind="text: number"></span></div>
+                    <div>Width: <span data-bind="text: width"></span> Inches</div>
+                </li>
             </ul>
+            <button id="addTier" class="button" data-bind="click: addTier">Add another tier</button>
         </div>
     </div>
     <div id="properties" class="tabs">
@@ -279,11 +302,11 @@
             </div>
             <div>
                 <div>Width: <label data-bind="text: selectedTier().width()"></label> Inches</div>
-                <div data-bind='jqSlider: selectedTier().width, jqOptions: { min: 6, max: 18, step: 2 }'></div>
+                <div data-bind="jqSlider: selectedTier().width, jqOptions: { min: 6, max: 18, step: 2, range: 'min' }"></div>
             </div>
             <div>
                 <div>Height: <label data-bind="text: selectedTier().height()"></label> Inches</div>
-                <div data-bind='jqSlider: selectedTier().height, jqOptions: { min: 2, max: 12, step: 1 }'></div>
+                <div data-bind="jqSlider: selectedTier().height, jqOptions: { min: 2, max: 12, step: 1, range: 'min' }"></div>
             </div>
             <div>
                 <span>Color</span>
